@@ -1,5 +1,3 @@
-// стандартный вариант с ручной сборкой строки
-
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
