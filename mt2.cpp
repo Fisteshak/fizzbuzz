@@ -13,7 +13,7 @@ const int LIMIT = 1'000'000'000;
 // 8 * 9 + 6 * 5 + 1 * 9
 const int BUFF_SIZE = 121;
 
-const int THREAD_NUM = 12;
+const int THREAD_NUM = 16;
 const int NUM_PER_THREAD = 3'000'000;
 const int THREAD_BUF_SIZE = (BUFF_SIZE * NUM_PER_THREAD / 15);
 const int NUM_PER_THREAD_MUL15 = NUM_PER_THREAD / 15 * 15;
