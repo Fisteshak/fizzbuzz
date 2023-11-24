@@ -7,6 +7,7 @@
 #include <thread>
 #include <vector>
 #include <array>
+#include <atomic>
 
 const int LIMIT = 24'000'000;
 
@@ -29,7 +30,10 @@ struct thread_data {
     std::thread t;
     std::array <char, THREAD_BUF_SIZE> buf;
     int buflen;
-
+    int start_num;
+    int nums_to_process;
+    int index;
+    atomic_bool is_ready = false;
 };
 
 std::array <thread_data, THREAD_NUM> thread_pool;
@@ -108,15 +112,23 @@ inline void process_chunk(char* &buf, int start_num) {
 
 
 }
-inline void worker(char* buf, const int start_num, const int nums_to_process, int* buflen) {
-    //data.buf.assign(THREAD_BUF_SIZE, 0);
+//char* buf, const int start_num, const int nums_to_process, int* buflen
+inline void worker(int ind) {
+
+    while (!thread_pool[ind].is_ready) {
+        this_thread::sleep_for(1ms);
+    }
+    thread_pool[ind].is_ready = false;
+
+    char* buf = thread_pool[ind].buf.data();
     const char* start_buf = buf;
-    for (int i = start_num; i < start_num + nums_to_process; i+=15) {
+
+    for (int i = thread_pool[ind].start_num; i < thread_pool[ind].start_num + thread_pool[ind].nums_to_process; i+=15) {
         process_chunk(buf, i);
     }
 
-    (*buflen) += (buf - start_buf);
-
+    thread_pool[ind].buflen += (buf - start_buf);
+    thread_pool[ind].is_ready = true;
 }
 
 void init_and_start_thread_pool(void) {
@@ -125,9 +137,15 @@ void init_and_start_thread_pool(void) {
         thread_pool[i].buflen = 0;
 
         active_threads_num++;
-        worker_cycles_done++;
 
-        thread_pool[i].t = std::thread(worker, thread_pool[i].buf.data(), first_non_processed_num, NUM_PER_THREAD, &(thread_pool[i].buflen));
+        worker_cycles_done++;
+        thread_pool[i].buflen = 0;
+        thread_pool[i].start_num = first_non_processed_num;
+        thread_pool[i].nums_to_process = NUM_PER_THREAD;
+        thread_pool[i].is_ready = true;
+
+        thread_pool[i].t = std::thread(worker, i);
+
         first_non_processed_num += NUM_PER_THREAD;
     }
 }
@@ -139,17 +157,24 @@ int main(void) {
 
     for (int i = 0; active_threads_num != 0; i = (i + 1) % THREAD_NUM) {
 
-        thread_pool[i].t.join();
+        while (!thread_pool[i].is_ready) {
+            this_thread::sleep_for(1ms);
+        }
+        //thread_pool[i].t.join();
 
         fwrite(thread_pool[i].buf.data(), thread_pool[i].buflen, 1, stdout);
 
         if (first_non_processed_num + NUM_PER_THREAD < LIMIT) {
             thread_pool[i].buflen = 0;
-            thread_pool[i].t = std::thread(worker, thread_pool[i].buf.data(), first_non_processed_num, NUM_PER_THREAD, &(thread_pool[i].buflen));
+            thread_pool[i].start_num = first_non_processed_num;
+            thread_pool[i].nums_to_process = NUM_PER_THREAD;
+
             first_non_processed_num += NUM_PER_THREAD;
         } else if (first_non_processed_num < LIMIT / 15 * 15) {
             thread_pool[i].buflen = 0;
-            thread_pool[i].t = std::thread(worker, thread_pool[i].buf.data(), first_non_processed_num, (LIMIT - first_non_processed_num) / 15 * 15, &(thread_pool[i].buflen));
+            thread_pool[i].start_num = first_non_processed_num;
+            thread_pool[i].nums_to_process = (LIMIT - first_non_processed_num) / 15 * 15;
+
             first_non_processed_num += (LIMIT - first_non_processed_num) / 15 * 15;
         } else {
             active_threads_num--;

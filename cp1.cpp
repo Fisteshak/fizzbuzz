@@ -1,19 +1,22 @@
-// второй вариант с многопоточностью
-
-#include <stdio.h>
-#include <string.h>
-#include <iostream>
-#include <charconv>
-#include <thread>
 #include <vector>
+#include <thread>
+#include <condition_variable>
+#include <queue>
+#include <functional>
+#include <algorithm>
+#include <string>
+#include <iostream>
 #include <array>
+#include <cstdio>
+#include <cstring>
+#include <charconv>
 
-const int LIMIT = 24'000'000;
+const int LIMIT = 1'000'000'000;
 
 // 8 * 9 + 6 * 5 + 1 * 9
 const int BUFF_SIZE = 121;
 
-const int THREAD_NUM = 8;
+const int THREAD_NUM = 16;
 const int NUM_PER_THREAD = 3'000'000;
 const int THREAD_BUF_SIZE = (BUFF_SIZE * NUM_PER_THREAD / 15);
 const int NUM_PER_THREAD_MUL15 = NUM_PER_THREAD / 15 * 15;
@@ -23,7 +26,55 @@ int worker_cycles_done = 0;
 int first_non_processed_num = 1;
 
 using namespace std;
+class ThreadPool {
+public:
+    ThreadPool(size_t numThreads) {
+        for (size_t i = 0; i < numThreads; ++i) {
+            threads.emplace_back([this] {
+                while (true) {
+                    std::function<void()> task;
 
+                    {
+                        std::unique_lock<std::mutex> lock(this->mutex);
+                        this->condition.wait(lock, [this] { return this->stop || !this->tasks.empty(); });
+                        if (this->stop && this->tasks.empty()) return;
+                        task = std::move(this->tasks.front());
+                        this->tasks.pop();
+                    }
+
+                    task();
+                }
+            });
+        }
+    }
+
+    template<class F>
+    void enqueue(F&& f) {
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            tasks.emplace(std::forward<F>(f));
+        }
+        condition.notify_one();
+    }
+
+    ~ThreadPool() {
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            stop = true;
+        }
+        condition.notify_all();
+        for (std::thread &thread : threads) {
+            thread.join();
+        }
+    }
+
+private:
+    std::vector<std::thread> threads;
+    std::queue<std::function<void()>> tasks;
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool stop = false;
+};
 
 struct thread_data {
     std::thread t;
@@ -31,8 +82,6 @@ struct thread_data {
     int buflen;
 
 };
-
-std::array <thread_data, THREAD_NUM> thread_pool;
 
 inline void write_num(char* &cur, int &num)
 {
@@ -119,44 +168,22 @@ inline void worker(char* buf, const int start_num, const int nums_to_process, in
 
 }
 
-void init_and_start_thread_pool(void) {
-    for (int i = 0; i < THREAD_NUM and first_non_processed_num + NUM_PER_THREAD < LIMIT; i++) {
-        //thread_pool[i].buf.assign(THREAD_BUF_SIZE, 0);
-        thread_pool[i].buflen = 0;
+std::array <thread_data, THREAD_NUM> thread_pool;
 
-        active_threads_num++;
-        worker_cycles_done++;
-
-        thread_pool[i].t = std::thread(worker, thread_pool[i].buf.data(), first_non_processed_num, NUM_PER_THREAD, &(thread_pool[i].buflen));
-        first_non_processed_num += NUM_PER_THREAD;
-    }
-}
 
 int main(void) {
-    int i;
+    ThreadPool pool(THREAD_NUM);
 
-    init_and_start_thread_pool();
-
-    for (int i = 0; active_threads_num != 0; i = (i + 1) % THREAD_NUM) {
-
-        thread_pool[i].t.join();
-
-        fwrite(thread_pool[i].buf.data(), thread_pool[i].buflen, 1, stdout);
-
-        if (first_non_processed_num + NUM_PER_THREAD < LIMIT) {
-            thread_pool[i].buflen = 0;
-            thread_pool[i].t = std::thread(worker, thread_pool[i].buf.data(), first_non_processed_num, NUM_PER_THREAD, &(thread_pool[i].buflen));
-            first_non_processed_num += NUM_PER_THREAD;
-        } else if (first_non_processed_num < LIMIT / 15 * 15) {
-            thread_pool[i].buflen = 0;
-            thread_pool[i].t = std::thread(worker, thread_pool[i].buf.data(), first_non_processed_num, (LIMIT - first_non_processed_num) / 15 * 15, &(thread_pool[i].buflen));
-            first_non_processed_num += (LIMIT - first_non_processed_num) / 15 * 15;
-        } else {
-            active_threads_num--;
-        }
+    for (int i = 0; i < LIMIT; i += NUM_PER_THREAD) {
+        pool.enqueue([i]() {
+            thread_data data;
+            data.buflen = 0;
+            worker(data.buf.data(), i, NUM_PER_THREAD, &(data.buflen));
+            fwrite(data.buf.data(), data.buflen, 1, stdout);
+        });
     }
 
-    i = first_non_processed_num;
+    int i = first_non_processed_num;
     while (i <= LIMIT) {
         if (i % 3 == 0) {
             printf("Fizz\n");
@@ -168,9 +195,5 @@ int main(void) {
         i++;
     }
 
-
-
-
     return 0;
-
 }
