@@ -1,10 +1,17 @@
+// вариант с ручной сборкой строки и чисел
+#define FMT_HEADER_ONLY
+
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
 #include <charconv>
 #include <thread>
+#include <iterator>
+#include <fmt/format.h>
+#include <fmt/compile.h>
 
 const int LIMIT = 1'000'000'000;
+//const int LIMIT = 24'000'000;
 
 // 8 * 9 + 6 * 5 + 1 * 9
 const int BUFF_SIZE = 121;
@@ -14,7 +21,7 @@ using namespace std;
 
 inline void write_num(char* &cur, int &num)
 {
-    cur = to_chars(cur, cur + 9, num).ptr;    
+    cur = fmt::format_to(cur, "{}", num);    
     *cur = '\n';
     cur++;
     num++;
@@ -27,14 +34,14 @@ inline void write_fizz(char* &cur, int &num)
     num++; 
 }
 
-inline void  write_buzz(char* &cur, int &num)
+inline void write_buzz(char* &cur, int &num)
 {
     memcpy(cur, "Buzz\n", 5); 
     cur += 5; 
     num++; 
 }
 
-inline void  write_fizzbuzz(char* &cur, int &num)
+inline void write_fizzbuzz(char* &cur, int &num)
 {
     memcpy(cur, "FizzBuzz\n", 9); 
     cur += 9; 
@@ -68,7 +75,7 @@ int main(void) {
     int i;
 
 
-    for (i = 1; i < LIMIT - 15; i += 15) {
+    for (i = 1; i < LIMIT / 15 * 15; i += 15) {
         print(i);
     }
     while (i <= LIMIT) {

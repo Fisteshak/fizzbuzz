@@ -1,5 +1,5 @@
 // стандартный вариант с ручной сборкой строки
-
+#define FMT_HEADER_ONLY
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
@@ -7,6 +7,7 @@
 #include <thread>
 
 const int LIMIT = 1'000'000'000;
+//const int LIMIT = 24'000'000;
 
 // 8 * 9 + 6 * 5 + 1 * 9
 const int BUFF_SIZE = 121;
@@ -29,14 +30,14 @@ inline void write_fizz(char* &cur, int &num)
     num++; 
 }
 
-inline void  write_buzz(char* &cur, int &num)
+inline void write_buzz(char* &cur, int &num)
 {
     memcpy(cur, "Buzz\n", 5); 
     cur += 5; 
     num++; 
 }
 
-inline void  write_fizzbuzz(char* &cur, int &num)
+inline void write_fizzbuzz(char* &cur, int &num)
 {
     memcpy(cur, "FizzBuzz\n", 9); 
     cur += 9; 
@@ -70,7 +71,7 @@ int main(void) {
     int i;
 
 
-    for (i = 1; i < LIMIT - 15; i += 15) {
+    for (i = 1; i < LIMIT / 15 * 15; i += 15) {
         print(i);
     }
     while (i <= LIMIT) {
