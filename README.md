@@ -3,7 +3,7 @@
 Вместо `/usr/bin/time` можно использовать любой другой способ засечь время
 # Сборка и запуск
 ```
-clang++ mt2.cpp -o mt2 -Ofast -march=native
-/usr/bin/time ./mt2 > /dev/null
+clang++ mt5.cpp -o mt5 -Ofast -march=native
+/usr/bin/time ./mt5 > /dev/null
 ```
 
